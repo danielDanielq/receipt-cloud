@@ -1,7 +1,19 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 class EditConfirmScreen extends StatefulWidget {
-  const EditConfirmScreen({super.key});
+  final String imagePath;
+  final Uint8List imageBytes;
+  final String rawOcrText;
+
+  const EditConfirmScreen({
+    super.key,
+    required this.imagePath,
+    required this.imageBytes,
+    required this.rawOcrText,
+  });
 
   @override
   State<EditConfirmScreen> createState() => _EditConfirmScreenState();
@@ -35,17 +47,13 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Phase 3: show scanned image thumbnail here
-            Container(
-              height: 180,
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Icon(Icons.image_outlined,
-                    size: 56, color: Colors.grey[400]),
-              ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: kIsWeb
+                  ? Image.memory(widget.imageBytes,
+                      height: 180, fit: BoxFit.cover)
+                  : Image.file(File(widget.imagePath),
+                      height: 180, fit: BoxFit.cover),
             ),
             const SizedBox(height: 24),
             TextField(
@@ -76,6 +84,9 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 24),
+            // Phase 4: auto-parse rawOcrText into fields above
+            _RawOcrTextBox(text: widget.rawOcrText),
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: () {
@@ -96,6 +107,61 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RawOcrTextBox extends StatefulWidget {
+  final String text;
+  const _RawOcrTextBox({required this.text});
+
+  @override
+  State<_RawOcrTextBox> createState() => _RawOcrTextBoxState();
+}
+
+class _RawOcrTextBoxState extends State<_RawOcrTextBox> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Row(
+            children: [
+              Text(
+                'Raw OCR text',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(color: Colors.black54),
+              ),
+              const Spacer(),
+              Icon(
+                _expanded ? Icons.expand_less : Icons.expand_more,
+                color: Colors.black38,
+              ),
+            ],
+          ),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: SelectableText(
+              widget.text,
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
