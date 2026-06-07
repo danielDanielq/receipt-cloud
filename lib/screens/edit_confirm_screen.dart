@@ -125,7 +125,7 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Total',
-                prefixIcon: Icon(Icons.attach_money),
+                prefixText: 'Lei ',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -147,27 +147,30 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
               ),
               const SizedBox(height: 8),
             ],
-            ElevatedButton(
-              onPressed: _isSaving ? null : _saveReceipt,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                textStyle: const TextStyle(fontSize: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            SafeArea(
+              top: false,
+              child: ElevatedButton(
+                onPressed: _isSaving ? null : _saveReceipt,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  textStyle: const TextStyle(fontSize: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Save Receipt'),
               ),
-              child: _isSaving
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Save Receipt'),
             ),
           ],
         ),

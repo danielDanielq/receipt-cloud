@@ -13,6 +13,10 @@ class ReceiptService {
         .map((snap) => snap.docs.map(Receipt.fromFirestore).toList());
   }
 
+  Future<void> deleteReceipt(String id) async {
+    await _db.collection('receipts').doc(id).delete();
+  }
+
   Future<void> saveReceipt({
     required String vendor,
     required String dateStr,

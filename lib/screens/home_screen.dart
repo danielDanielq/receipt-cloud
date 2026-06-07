@@ -61,8 +61,40 @@ class HomeScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             itemCount: receipts.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) =>
-                _ReceiptCard(receipt: receipts[index]),
+            itemBuilder: (context, index) {
+              final receipt = receipts[index];
+              return Dismissible(
+                key: ValueKey(receipt.id),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade400,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.delete_outline,
+                      color: Colors.white, size: 26),
+                ),
+                onDismissed: (_) async {
+                  try {
+                    await ReceiptService().deleteReceipt(receipt.id);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Receipt deleted')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Delete failed: $e')),
+                      );
+                    }
+                  }
+                },
+                child: _ReceiptCard(receipt: receipt),
+              );
+            },
           );
         },
       ),
@@ -127,7 +159,7 @@ class _ReceiptCard extends StatelessWidget {
   }
 
   String _formatTotal(double total) {
-    return '\$${total.toStringAsFixed(2)}';
+    return 'Lei ${total.toStringAsFixed(2)}';
   }
 
   @override
