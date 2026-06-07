@@ -1,7 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../services/receipt_parser.dart';
+import '../services/receipt_service.dart';
 
 class EditConfirmScreen extends StatefulWidget {
   final String imagePath;
@@ -24,12 +27,53 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
   final _dateController = TextEditingController();
   final _totalController = TextEditingController();
 
+  List<String> _parsedItems = [];
+  bool _isSaving = false;
+  String? _saveError;
+
+  @override
+  void initState() {
+    super.initState();
+    final parsed = ReceiptParser().parse(widget.rawOcrText);
+    _vendorController.text = parsed.vendor;
+    _dateController.text = parsed.date;
+    _totalController.text = parsed.total;
+    _parsedItems = parsed.items;
+  }
+
   @override
   void dispose() {
     _vendorController.dispose();
     _dateController.dispose();
     _totalController.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveReceipt() async {
+    setState(() {
+      _isSaving = true;
+      _saveError = null;
+    });
+    try {
+      final userId = FirebaseAuth.instance.currentUser!.uid;
+      await ReceiptService().saveReceipt(
+        vendor: _vendorController.text,
+        dateStr: _dateController.text,
+        totalStr: _totalController.text,
+        items: _parsedItems,
+        userId: userId,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Receipt saved!')),
+      );
+      Navigator.popUntil(context, (route) => route.isFirst);
+    } catch (e) {
+      setState(() {
+        _isSaving = false;
+        _saveError = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
   @override
@@ -58,6 +102,7 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
             const SizedBox(height: 24),
             TextField(
               controller: _vendorController,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Vendor',
                 prefixIcon: Icon(Icons.store_outlined),
@@ -84,15 +129,26 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
+            if (_parsedItems.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _ItemsPreview(items: _parsedItems),
+            ],
             const SizedBox(height: 24),
-            // Phase 4: auto-parse rawOcrText into fields above
             _RawOcrTextBox(text: widget.rawOcrText),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+            if (_saveError != null) ...[
+              Text(
+                _saveError!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             ElevatedButton(
-              onPressed: () {
-                // Phase 4: save Receipt to Firestore, then pop to Home
-                Navigator.popUntil(context, (route) => route.isFirst);
-              },
+              onPressed: _isSaving ? null : _saveReceipt,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepPurple,
                 foregroundColor: Colors.white,
@@ -102,7 +158,16 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text('Save Receipt'),
+              child: _isSaving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('Save Receipt'),
             ),
           ],
         ),
@@ -110,6 +175,55 @@ class _EditConfirmScreenState extends State<EditConfirmScreen> {
     );
   }
 }
+
+// ── Items preview ────────────────────────────────────────────────────────────
+
+class _ItemsPreview extends StatelessWidget {
+  final List<String> items;
+  const _ItemsPreview({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Detected items (${items.length})',
+            style: Theme.of(context)
+                .textTheme
+                .labelLarge
+                ?.copyWith(color: Colors.black54),
+          ),
+          const SizedBox(height: 8),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  const Icon(Icons.circle, size: 6, color: Colors.black38),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(item,
+                        style: const TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Raw OCR text (collapsible) ───────────────────────────────────────────────
 
 class _RawOcrTextBox extends StatefulWidget {
   final String text;

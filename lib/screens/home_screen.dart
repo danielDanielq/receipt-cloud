@@ -1,12 +1,17 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'scan_screen.dart';
+import '../models/receipt.dart';
+import '../services/receipt_service.dart';
 import 'profile_screen.dart';
+import 'scan_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final userId = FirebaseAuth.instance.currentUser!.uid;
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -26,7 +31,41 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: _ReceiptsPlaceholder(),
+      body: StreamBuilder<List<Receipt>>(
+        stream: ReceiptService().receiptsStream(userId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text(
+                  'Could not load receipts.\n${snapshot.error}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+              ),
+            );
+          }
+
+          final receipts = snapshot.data ?? [];
+
+          if (receipts.isEmpty) {
+            return _EmptyState();
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            itemCount: receipts.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) =>
+                _ReceiptCard(receipt: receipts[index]),
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(
           context,
@@ -41,7 +80,9 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _ReceiptsPlaceholder extends StatelessWidget {
+// ── Empty state ──────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -66,6 +107,90 @@ class _ReceiptsPlaceholder extends StatelessWidget {
                 ?.copyWith(color: Colors.black38),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Receipt card ─────────────────────────────────────────────────────────────
+
+class _ReceiptCard extends StatelessWidget {
+  final Receipt receipt;
+  const _ReceiptCard({required this.receipt});
+
+  String _formatDate(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  String _formatTotal(double total) {
+    return '\$${total.toStringAsFixed(2)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.receipt_outlined,
+                color: Colors.deepPurple,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    receipt.vendor.isEmpty ? 'Unknown' : receipt.vendor,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _formatDate(receipt.date),
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              _formatTotal(receipt.total),
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                color: Colors.deepPurple,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
