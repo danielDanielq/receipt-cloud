@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/receipt.dart';
 import '../services/receipt_service.dart';
 import 'profile_screen.dart';
+import 'receipt_detail_screen.dart';
 import 'scan_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -92,7 +93,15 @@ class HomeScreen extends StatelessWidget {
                     }
                   }
                 },
-                child: _ReceiptCard(receipt: receipt),
+                child: _ReceiptCard(
+                  receipt: receipt,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ReceiptDetailScreen(receipt: receipt),
+                    ),
+                  ),
+                ),
               );
             },
           );
@@ -148,7 +157,8 @@ class _EmptyState extends StatelessWidget {
 
 class _ReceiptCard extends StatelessWidget {
   final Receipt receipt;
-  const _ReceiptCard({required this.receipt});
+  final VoidCallback? onTap;
+  const _ReceiptCard({required this.receipt, this.onTap});
 
   String _formatDate(DateTime date) {
     const months = [
@@ -171,7 +181,10 @@ class _ReceiptCard extends StatelessWidget {
         side: BorderSide(color: Colors.grey.shade200),
       ),
       color: Colors.white,
-      child: Padding(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
@@ -222,6 +235,7 @@ class _ReceiptCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

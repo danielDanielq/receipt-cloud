@@ -13,6 +13,16 @@ class ParsedReceipt {
 }
 
 class ReceiptParser {
+  // ── Romanian fiscal receipt patterns ─────────────────────────────────────────
+
+  // Quantity line: "1.000 BUC x 4.79" — both x and X accepted
+  static final _bucLine = RegExp(
+    r'^(\d+[.,]\d+)\s+BUC\s+[xX]\s+(\d+[.,]\d+)',
+    caseSensitive: false,
+  );
+
+  // ── Entry point ───────────────────────────────────────────────────────────────
+
   ParsedReceipt parse(String rawText) {
     final lines = rawText
         .split(RegExp(r'\r?\n'))
@@ -22,7 +32,13 @@ class ReceiptParser {
     final date = _extractDate(rawText);
     final vendor = _extractVendor(lines);
     final total = _extractTotal(rawText);
-    final items = _extractItems(lines, vendor: vendor, date: date);
+
+    // Route to Romanian block parser when BUC lines are present; otherwise
+    // use the generic noise-filter fallback.
+    final isRomanian = lines.any(_bucLine.hasMatch);
+    final items = isRomanian
+        ? _extractItemsRomanian(lines)
+        : _extractItems(lines, vendor: vendor, date: date);
 
     return ParsedReceipt(
       vendor: vendor,
@@ -32,7 +48,7 @@ class ReceiptParser {
     );
   }
 
-  // ── Vendor ──────────────────────────────────────────────────────────────────
+  // ── Vendor ───────────────────────────────────────────────────────────────────
 
   String _extractVendor(List<String> lines) {
     final priceOrDigit = RegExp(r'^[\d\s\$\.,\-\+\(\)\/]+$');
@@ -47,7 +63,7 @@ class ReceiptParser {
     return '';
   }
 
-  // ── Total ───────────────────────────────────────────────────────────────────
+  // ── Total ─────────────────────────────────────────────────────────────────────
 
   String _extractTotal(String rawText) {
     // Normalize Romanian decimal format (265,00 → 265.00) before matching.
@@ -102,7 +118,7 @@ class ReceiptParser {
     return largestStr;
   }
 
-  // ── Date ────────────────────────────────────────────────────────────────────
+  // ── Date ─────────────────────────────────────────────────────────────────────
 
   String _extractDate(String rawText) {
     final patterns = [
@@ -133,7 +149,66 @@ class ReceiptParser {
     return '';
   }
 
-  // ── Items ───────────────────────────────────────────────────────────────────
+  // ── Romanian item extraction ──────────────────────────────────────────────────
+  //
+  // Fixed 3-line block per item (BUC line always anchors position):
+  //   i+0  "1.000 BUC x 4.79"   ← quantity anchor
+  //   i+1  "SMANT.GATIT 20%"    ← product name
+  //   i+2  "4.79 A"             ← total price + VAT category (A or B)
+
+  List<String> _extractItemsRomanian(List<String> lines) {
+    // Total-price line: digits followed immediately by A or B VAT category.
+    final vatLine = RegExp(r'^\d+[.,]\d+\s*[AB]\s*$');
+
+    // Names matching these are noise, not products.
+    final skipName = RegExp(
+      r'^\s*$|^\d+([.,]\d+)?\s*$|'
+      r'\b(?:DISCOUNT|Reducere|Lei|RON)\b',
+      caseSensitive: false,
+    );
+
+    bool isValidName(String s) =>
+        s.isNotEmpty && !vatLine.hasMatch(s) && !skipName.hasMatch(s);
+
+    final items = <String>[];
+
+    for (int i = 0; i < lines.length; i++) {
+      final bm = _bucLine.firstMatch(lines[i]);
+      if (bm == null) continue;
+
+      final next = (i + 1 < lines.length) ? lines[i + 1].trim() : '';
+
+      String name;
+      if (!vatLine.hasMatch(next)) {
+        // Normal case: name is at i+1.
+        name = next;
+      } else {
+        // OCR missed the name — the VAT line landed at i+1.
+        // Fall back to i-1 (name printed before the BUC line).
+        final prev = (i > 0) ? lines[i - 1].trim() : '';
+        if (!isValidName(prev)) continue; // no usable name either side — skip
+        name = prev;
+      }
+
+      if (!isValidName(name)) continue;
+
+      // Quantity: "1.000" → 1, "0.500" → 0.5
+      final qtyRaw = bm.group(1)!.replaceAll(',', '.');
+      final qtyNum = double.tryParse(qtyRaw) ?? 1.0;
+      final qty = qtyNum == qtyNum.truncateToDouble()
+          ? qtyNum.toInt().toString()
+          : qtyNum.toString();
+
+      // Unit price from BUC line (comma → dot)
+      final unitPrice = bm.group(2)!.replaceAll(',', '.');
+
+      items.add('$name - $qty x $unitPrice lei');
+    }
+
+    return items.take(20).toList();
+  }
+
+  // ── Generic item extraction (non-Romanian fallback) ───────────────────────────
 
   List<String> _extractItems(
     List<String> lines, {
